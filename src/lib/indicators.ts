@@ -1,3 +1,6 @@
+import { exchangeOf, getMarketState, statusLabelFor } from "./marketHours";
+import { rememberSuccess, getStale } from "./cache";
+
 export type Indicator = {
   label: string;
   source: string;
@@ -12,6 +15,14 @@ export type Indicator = {
   marketState?: "live" | "afterhours" | "closed";
   referenceDate?: string;
   dateLabel?: string;
+  stale?: boolean;
+  staleAgeMs?: number;
+  afterHoursPrice?: number;
+  afterHoursChange?: number;
+  afterHoursChangePercent?: number;
+  preMarketPrice?: number;
+  preMarketChange?: number;
+  preMarketChangePercent?: number;
 };
 
 const BANREP_BASE =
@@ -107,7 +118,29 @@ function fail(
   };
 }
 
-// ─── BanRep series con etiqueta de fecha contextual ────────────────────
+async function withCacheFallback(
+  cacheKey: string,
+  fetcher: () => Promise<Indicator>
+): Promise<Indicator> {
+  const fresh = await fetcher();
+  if (fresh.ok) {
+    rememberSuccess(cacheKey, fresh);
+    return fresh;
+  }
+
+  const stale = getStale(cacheKey);
+  if (stale) {
+    return {
+      ...stale.indicator,
+      stale: true,
+      staleAgeMs: stale.ageMs,
+      statusLabel: "Datos previos",
+    };
+  }
+
+  return fresh;
+}
+
 async function banrepSeries(
   label: string,
   idMenu: number,
@@ -142,86 +175,120 @@ async function banrepSeries(
   }
 }
 
-export const getTrm   = () => banrepSeries("TRM", 1, "COP/USD", { dateLabel: "Vigente" });
-export const getUvr   = () => banrepSeries("UVR", 100005, "COP/UVR", { dateLabel: "Vigente" });
-export const getSmmlv = () => banrepSeries("SMMLV", 500023, "COP", { dateLabel: "Año fiscal" });
-export const getPib   = () => banrepSeries("PIB anual", 500011, "%", { dateLabel: "Período" });
+export const getTrm = () =>
+  withCacheFallback("trm", () =>
+    banrepSeries("TRM", 1, "COP/USD", { dateLabel: "Vigente" })
+  );
+
+export const getUvr = () =>
+  withCacheFallback("uvr", () =>
+    banrepSeries("UVR", 100005, "COP/UVR", { dateLabel: "Vigente" })
+  );
+
+export const getSmmlv = () =>
+  withCacheFallback("smmlv", () =>
+    banrepSeries("SMMLV", 500023, "COP", { dateLabel: "Año fiscal" })
+  );
+
+export const getPib = () =>
+  withCacheFallback("pib", () =>
+    banrepSeries("PIB anual", 500011, "%", { dateLabel: "Período" })
+  );
+
 export const getIpc12 = () =>
-  banrepSeries("IPC 12 meses", 100001, "%", { seriesIdx: 1, dateLabel: "Cierre" });
-
-// ─── DANE: IPC mensual ─────────────────────────────────────────────────
-export async function getIpcMensual(): Promise<Indicator> {
-  try {
-    const res = await fetch(
-      "https://sen.dane.gov.co/services_ipc/rest/IpcServices/getLastTotVariation",
-      { cache: "no-store" }
-    );
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    const row = data?.[0];
-    const value = row?.value;
-    if (value === undefined) throw new Error("Estructura inesperada");
-
-    return ok("IPC mensual", "DANE", Number(value), "%", {
-      statusLabel: "Oficial",
-      marketState: undefined,
-      referenceDate: formatDate(row?.date ?? row?.fecha ?? row?.referenceDate),
+  withCacheFallback("ipc12", () =>
+    banrepSeries("IPC 12 meses", 100001, "%", {
+      seriesIdx: 1,
       dateLabel: "Cierre",
-    });
-  } catch (e) {
-    return fail("IPC mensual", "DANE", "%", e);
-  }
-}
+    })
+  );
 
-// ─── Yahoo Finance con marketState ─────────────────────────────────────
-function mapYahooMarketState(state: unknown): {
-  marketState: "live" | "afterhours" | "closed";
-  statusLabel: string;
-} {
-  switch (state) {
-    case "REGULAR":
-      return { marketState: "live", statusLabel: "En vivo" };
-    case "PRE":
-      return { marketState: "afterhours", statusLabel: "Pre-market" };
-    case "POST":
-      return { marketState: "afterhours", statusLabel: "After-hours" };
-    case "CLOSED":
-    case "PREPRE":
-    case "POSTPOST":
-      return { marketState: "closed", statusLabel: "Mercado cerrado" };
-    default:
-      return { marketState: "closed", statusLabel: "Mercado cerrado" };
-  }
-}
+export function getIpcMensual(): Promise<Indicator> {
+  return withCacheFallback("ipcMensual", async () => {
+    try {
+      const res = await fetch(
+        "https://sen.dane.gov.co/services_ipc/rest/IpcServices/getLastTotVariation",
+        { cache: "no-store" }
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const row = data?.[0];
+      const value = row?.value;
+      if (value === undefined) throw new Error("Estructura inesperada");
 
-export async function getYahoo(
-  symbol: string,
-  label: string
-): Promise<Indicator> {
-  try {
-    const res = await fetch(
-      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}`,
-      { headers: { "User-Agent": "Mozilla/5.0" }, cache: "no-store" }
-    );
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    const meta = data?.chart?.result?.[0]?.meta;
-    if (meta?.regularMarketPrice === undefined) throw new Error("Sin precio");
-
-    const price = Number(meta.regularMarketPrice);
-    const prevRaw = meta.chartPreviousClose ?? meta.previousClose;
-    const { marketState, statusLabel } = mapYahooMarketState(meta.marketState);
-
-    const extras: Partial<Indicator> = { marketState, statusLabel };
-    if (typeof prevRaw === "number" && prevRaw !== 0) {
-      const change = price - prevRaw;
-      extras.previousClose = prevRaw;
-      extras.change = change;
-      extras.changePercent = (change / prevRaw) * 100;
+      return ok("IPC mensual", "DANE", Number(value), "%", {
+        statusLabel: "Oficial",
+        marketState: undefined,
+        referenceDate: formatDate(row?.date ?? row?.fecha ?? row?.referenceDate),
+        dateLabel: "Cierre",
+      });
+    } catch (e) {
+      return fail("IPC mensual", "DANE", "%", e);
     }
+  });
+}
 
-    return ok(label, "Yahoo Finance", price, meta.currency ?? "", extras);
-  } catch (e) {
-    return fail(label, "Yahoo Finance", "", e);
-  }
+export function getYahoo(symbol: string, label: string): Promise<Indicator> {
+  return withCacheFallback(`yahoo:${symbol}`, async () => {
+    try {
+      const res = await fetch(
+        `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?includePrePost=true&interval=5m&range=1d`,
+        { headers: { "User-Agent": "Mozilla/5.0" }, cache: "no-store" }
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const result = data?.chart?.result?.[0];
+      const meta = result?.meta;
+      if (meta?.regularMarketPrice === undefined) throw new Error("Sin precio");
+
+      const price = Number(meta.regularMarketPrice);
+      const prevRaw = meta.chartPreviousClose ?? meta.previousClose;
+
+      const exchange = exchangeOf(symbol);
+      const marketState = exchange ? getMarketState(exchange) : "closed";
+      const statusLabel = statusLabelFor(marketState);
+
+      const extras: Partial<Indicator> = { marketState, statusLabel };
+      if (typeof prevRaw === "number" && prevRaw !== 0) {
+        const change = price - prevRaw;
+        extras.previousClose = prevRaw;
+        extras.change = change;
+        extras.changePercent = (change / prevRaw) * 100;
+      }
+
+      const timestamps: number[] | undefined = result?.timestamp;
+      const closes: (number | null)[] | undefined =
+        result?.indicators?.quote?.[0]?.close;
+      const regularMarketTime: number | undefined = meta?.regularMarketTime;
+
+      if (
+        Array.isArray(timestamps) &&
+        Array.isArray(closes) &&
+        typeof regularMarketTime === "number" &&
+        timestamps.length === closes.length
+      ) {
+        let postClose: number | undefined;
+        for (let i = timestamps.length - 1; i >= 0; i--) {
+          if (timestamps[i] > regularMarketTime) {
+            const c = closes[i];
+            if (typeof c === "number" && c > 0) {
+              postClose = c;
+              break;
+            }
+          }
+        }
+
+        if (postClose !== undefined && Math.abs(postClose - price) > 0.001) {
+          const ahChange = postClose - price;
+          extras.afterHoursPrice = postClose;
+          extras.afterHoursChange = ahChange;
+          extras.afterHoursChangePercent = (ahChange / price) * 100;
+        }
+      }
+
+      return ok(label, "Yahoo Finance", price, meta.currency ?? "", extras);
+    } catch (e) {
+      return fail(label, "Yahoo Finance", "", e);
+    }
+  });
 }

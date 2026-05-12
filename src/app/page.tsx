@@ -37,6 +37,7 @@ export default async function Home() {
       getYahoo("AMZN", "AMAZON"),
       getYahoo("JPM", "JPMorgan"),
       getYahoo("MDLZ", "Mondelez"),
+      getYahoo("BLK", "BlackRock"),
     ]),
     Promise.all([
       getYahoo("COP=X", "USD/COP"),
@@ -99,22 +100,72 @@ export default async function Home() {
   );
 }
 
-function IndicatorCard({ indicator }: { indicator: Indicator }) {
-  const hasChange = indicator.changePercent !== undefined;
-  const isUp = hasChange && indicator.changePercent! > 0;
-  const isDown = hasChange && indicator.changePercent! < 0;
-
-  const changeColor = isUp
+function ChangeLine({
+  change,
+  changePercent,
+  size = "md",
+}: {
+  change: number;
+  changePercent: number;
+  size?: "md" | "sm";
+}) {
+  const isUp = changePercent > 0;
+  const isDown = changePercent < 0;
+  const color = isUp
     ? "text-emerald-400"
     : isDown
     ? "text-red-400"
     : "text-zinc-400";
-
   const arrow = isUp ? "▲" : isDown ? "▼" : "—";
+
+  const isSm = size === "sm";
+
+  return (
+    <div
+      className={`flex items-baseline gap-1.5 ${
+        isSm ? "text-xs" : "text-sm"
+      } ${color}`}
+    >
+      <span className={isSm ? "text-[10px]" : "text-xs"}>{arrow}</span>
+      <span className="font-medium tabular-nums">
+        {changePercent.toLocaleString("es-CO", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+          signDisplay: "always",
+        })}
+        %
+      </span>
+      <span
+        className={`tabular-nums text-zinc-500 ${
+          isSm ? "text-[10px]" : "text-xs"
+        }`}
+      >
+        (
+        {change.toLocaleString("es-CO", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+          signDisplay: "always",
+        })}
+        )
+      </span>
+    </div>
+  );
+}
+
+function IndicatorCard({ indicator }: { indicator: Indicator }) {
+  const hasChange = indicator.changePercent !== undefined;
+  const hasAh =
+    indicator.afterHoursPrice !== undefined &&
+    indicator.afterHoursChangePercent !== undefined;
+  const hasPm =
+    indicator.preMarketPrice !== undefined &&
+    indicator.preMarketChangePercent !== undefined;
 
   let statusClasses: string;
   if (!indicator.ok) {
     statusClasses = "text-red-400 bg-red-400/10";
+  } else if (indicator.stale) {
+    statusClasses = "text-amber-300 bg-amber-300/10";
   } else if (indicator.statusLabel === "Oficial") {
     statusClasses = "text-sky-300 bg-sky-300/10";
   } else if (indicator.marketState === "closed") {
@@ -159,29 +210,61 @@ function IndicatorCard({ indicator }: { indicator: Indicator }) {
             </p>
           )}
 
+          {indicator.stale && indicator.staleAgeMs !== undefined && (
+            <p className="text-xs text-amber-400/80 mt-2">
+              Última lectura: hace{" "}
+              {Math.round(indicator.staleAgeMs / 60000) < 1
+                ? "menos de 1 min"
+                : `${Math.round(indicator.staleAgeMs / 60000)} min`}
+            </p>
+          )}
+
           {hasChange && (
-            <div
-              className={`flex items-baseline gap-1.5 mt-3 text-sm ${changeColor}`}
-            >
-              <span className="text-xs">{arrow}</span>
-              <span className="font-medium tabular-nums">
-                {indicator.changePercent!.toLocaleString("es-CO", {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                  signDisplay: "always",
-                })}
-                %
-              </span>
-              {indicator.change !== undefined && (
-                <span className="text-xs text-zinc-500 tabular-nums">
-                  (
-                  {indicator.change.toLocaleString("es-CO", {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                    signDisplay: "always",
-                  })}
-                  )
-                </span>
+            <div className="mt-3">
+              <ChangeLine
+                change={indicator.change!}
+                changePercent={indicator.changePercent!}
+              />
+            </div>
+          )}
+
+          {(hasAh || hasPm) && (
+            <div className="mt-3 pt-3 border-t border-zinc-800">
+              {hasAh && (
+                <div className="flex items-baseline gap-2">
+                  <span className="text-[10px] uppercase tracking-wider text-zinc-500 shrink-0">
+                    AH
+                  </span>
+                  <span className="text-sm font-medium tabular-nums text-zinc-300">
+                    {indicator.afterHoursPrice!.toLocaleString("es-CO", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </span>
+                  <ChangeLine
+                    change={indicator.afterHoursChange!}
+                    changePercent={indicator.afterHoursChangePercent!}
+                    size="sm"
+                  />
+                </div>
+              )}
+              {hasPm && (
+                <div className="flex items-baseline gap-2">
+                  <span className="text-[10px] uppercase tracking-wider text-zinc-500 shrink-0">
+                    PM
+                  </span>
+                  <span className="text-sm font-medium tabular-nums text-zinc-300">
+                    {indicator.preMarketPrice!.toLocaleString("es-CO", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </span>
+                  <ChangeLine
+                    change={indicator.preMarketChange!}
+                    changePercent={indicator.preMarketChangePercent!}
+                    size="sm"
+                  />
+                </div>
               )}
             </div>
           )}
