@@ -5,9 +5,11 @@ export type Indicator = {
   unit: string;
   ok: boolean;
   error?: string;
+  previousClose?: number;
+  change?: number;
+  changePercent?: number;
 };
 
-// ─── BanRep ────────────────────────────────────────────────────────────
 const BANREP_BASE =
   "https://suameca.banrep.gov.co/estadisticas-economicas-back/rest/estadisticaEconomicaRestService/consultaMenuXId?idMenu=";
 
@@ -29,14 +31,14 @@ async function fetchBanrep(idMenu: number) {
   return res.json();
 }
 
-// ─── Helpers de resultado ──────────────────────────────────────────────
 function ok(
   label: string,
   source: string,
   value: number,
-  unit: string
+  unit: string,
+  extras: Partial<Indicator> = {}
 ): Indicator {
-  return { label, source, value, unit, ok: true };
+  return { label, source, value, unit, ok: true, ...extras };
 }
 
 function fail(
@@ -55,7 +57,6 @@ function fail(
   };
 }
 
-// ─── Series de BanRep (mismo formato JSON) ─────────────────────────────
 async function banrepSeries(
   label: string,
   idMenu: number,
@@ -78,7 +79,6 @@ export const getSmmlv = () => banrepSeries("SMMLV", 500023, "COP");
 export const getPib   = () => banrepSeries("PIB anual", 500011, "%");
 export const getIpc12 = () => banrepSeries("IPC 12 meses", 100001, "%", 1);
 
-// ─── DANE: IPC mensual (estructura distinta) ───────────────────────────
 export async function getIpcMensual(): Promise<Indicator> {
   try {
     const res = await fetch(
@@ -95,7 +95,6 @@ export async function getIpcMensual(): Promise<Indicator> {
   }
 }
 
-// ─── Yahoo Finance ─────────────────────────────────────────────────────
 export async function getYahoo(
   symbol: string,
   label: string
@@ -109,11 +108,26 @@ export async function getYahoo(
     const data = await res.json();
     const meta = data?.chart?.result?.[0]?.meta;
     if (meta?.regularMarketPrice === undefined) throw new Error("Sin precio");
+
+    const price = Number(meta.regularMarketPrice);
+    const prevRaw = meta.chartPreviousClose ?? meta.previousClose;
+
+    let extras: Partial<Indicator> = {};
+    if (typeof prevRaw === "number" && prevRaw !== 0) {
+      const change = price - prevRaw;
+      extras = {
+        previousClose: prevRaw,
+        change,
+        changePercent: (change / prevRaw) * 100,
+      };
+    }
+
     return ok(
       label,
       "Yahoo Finance",
-      Number(meta.regularMarketPrice),
-      meta.currency ?? ""
+      price,
+      meta.currency ?? "",
+      extras
     );
   } catch (e) {
     return fail(label, "Yahoo Finance", "", e);

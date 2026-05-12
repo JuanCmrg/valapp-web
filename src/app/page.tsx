@@ -100,6 +100,18 @@ export default async function Home() {
 }
 
 function IndicatorCard({ indicator }: { indicator: Indicator }) {
+  const hasChange = indicator.changePercent !== undefined;
+  const isUp = hasChange && indicator.changePercent! > 0;
+  const isDown = hasChange && indicator.changePercent! < 0;
+
+  const changeColor = isUp
+    ? "text-emerald-400"
+    : isDown
+    ? "text-red-400"
+    : "text-zinc-400";
+
+  const arrow = isUp ? "▲" : isDown ? "▼" : "—";
+
   return (
     <article className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 hover:border-zinc-700 transition-colors">
       <div className="flex items-start justify-between mb-3">
@@ -131,6 +143,33 @@ function IndicatorCard({ indicator }: { indicator: Indicator }) {
           <p className="text-sm text-zinc-400 mt-1">
             {indicator.unit || "\u00A0"}
           </p>
+
+          {hasChange && (
+            <div
+              className={`flex items-baseline gap-1.5 mt-3 text-sm ${changeColor}`}
+            >
+              <span className="text-xs">{arrow}</span>
+              <span className="font-medium tabular-nums">
+                {indicator.changePercent!.toLocaleString("es-CO", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                  signDisplay: "always",
+                })}
+                %
+              </span>
+              {indicator.change !== undefined && (
+                <span className="text-xs text-zinc-500 tabular-nums">
+                  (
+                  {indicator.change.toLocaleString("es-CO", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                    signDisplay: "always",
+                  })}
+                  )
+                </span>
+              )}
+            </div>
+          )}
         </>
       ) : (
         <p className="text-sm text-red-400">No se pudo cargar</p>
