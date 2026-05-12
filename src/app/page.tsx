@@ -112,6 +112,19 @@ function IndicatorCard({ indicator }: { indicator: Indicator }) {
 
   const arrow = isUp ? "▲" : isDown ? "▼" : "—";
 
+  let statusClasses: string;
+  if (!indicator.ok) {
+    statusClasses = "text-red-400 bg-red-400/10";
+  } else if (indicator.statusLabel === "Oficial") {
+    statusClasses = "text-sky-300 bg-sky-300/10";
+  } else if (indicator.marketState === "closed") {
+    statusClasses = "text-zinc-400 bg-zinc-400/10";
+  } else if (indicator.marketState === "afterhours") {
+    statusClasses = "text-amber-300 bg-amber-300/10";
+  } else {
+    statusClasses = "text-emerald-400 bg-emerald-400/10";
+  }
+
   return (
     <article className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 hover:border-zinc-700 transition-colors">
       <div className="flex items-start justify-between mb-3">
@@ -122,13 +135,9 @@ function IndicatorCard({ indicator }: { indicator: Indicator }) {
           <p className="text-lg font-medium mt-1 truncate">{indicator.label}</p>
         </div>
         <span
-          className={`shrink-0 text-xs px-2 py-1 rounded-md ${
-            indicator.ok
-              ? "text-emerald-400 bg-emerald-400/10"
-              : "text-red-400 bg-red-400/10"
-          }`}
+          className={`shrink-0 text-xs px-2 py-1 rounded-md ${statusClasses}`}
         >
-          {indicator.ok ? "En vivo" : "Error"}
+          {indicator.ok ? indicator.statusLabel ?? "En vivo" : "Error"}
         </span>
       </div>
 
@@ -143,6 +152,12 @@ function IndicatorCard({ indicator }: { indicator: Indicator }) {
           <p className="text-sm text-zinc-400 mt-1">
             {indicator.unit || "\u00A0"}
           </p>
+
+          {indicator.referenceDate && (
+            <p className="text-xs text-zinc-500 mt-2">
+              {indicator.dateLabel ?? "Vigente"}: {indicator.referenceDate}
+            </p>
+          )}
 
           {hasChange && (
             <div
