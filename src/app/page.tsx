@@ -1,65 +1,140 @@
-import Image from "next/image";
+import {
+  getTrm,
+  getUvr,
+  getSmmlv,
+  getIpc12,
+  getIpcMensual,
+  getPib,
+  getYahoo,
+  type Indicator,
+} from "@/lib/indicators";
+import RefreshButton from "./RefreshButton";
 
-export default function Home() {
+type Category = { title: string; indicators: Indicator[] };
+
+export default async function Home() {
+  const [macro, indices, acciones, forex, commodities] = await Promise.all([
+    Promise.all([
+      getTrm(),
+      getUvr(),
+      getSmmlv(),
+      getIpc12(),
+      getIpcMensual(),
+      getPib(),
+    ]),
+    Promise.all([
+      getYahoo("^GSPC", "S&P 500"),
+      getYahoo("^IXIC", "NASDAQ Composite"),
+      getYahoo("^NDX", "NASDAQ 100"),
+      getYahoo("^BVSP", "IBOVESPA"),
+      getYahoo("^N225", "NIKKEI"),
+    ]),
+    Promise.all([
+      getYahoo("ECOPETROL.CL", "ECOPETROL"),
+      getYahoo("PFCIBEST.CL", "PFCIBEST"),
+      getYahoo("NVDA", "NVIDIA"),
+      getYahoo("TSLA", "TESLA"),
+      getYahoo("AMZN", "AMAZON"),
+      getYahoo("JPM", "JPMorgan"),
+      getYahoo("MDLZ", "Mondelez"),
+    ]),
+    Promise.all([
+      getYahoo("COP=X", "USD/COP"),
+      getYahoo("EURUSD=X", "EUR/USD"),
+      getYahoo("CHF=X", "USD/CHF"),
+      getYahoo("MXN=X", "USD/MXN"),
+      getYahoo("BRL=X", "USD/BRL"),
+      getYahoo("CHFCOP=X", "CHF/COP"),
+    ]),
+    Promise.all([
+      getYahoo("CL=F", "WTI"),
+      getYahoo("BZ=F", "Brent"),
+      getYahoo("GC=F", "Oro"),
+    ]),
+  ]);
+
+  const categories: Category[] = [
+    { title: "Macro Colombia", indicators: macro },
+    { title: "Índices", indicators: indices },
+    { title: "Acciones", indicators: acciones },
+    { title: "Forex", indicators: forex },
+    { title: "Commodities", indicators: commodities },
+  ];
+
+  const updated = new Date().toLocaleString("es-CO", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "America/Bogota",
+  });
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <main className="min-h-screen bg-zinc-950 text-zinc-50 p-6">
+      <div className="max-w-6xl mx-auto">
+        <header className="mb-10 flex items-end justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="text-4xl font-bold tracking-tight">VALAPP</h1>
+            <p className="text-sm text-zinc-400 mt-1">
+              Monitor de mercado · actualizado {updated}
+            </p>
+          </div>
+          <RefreshButton />
+        </header>
+
+        <div className="space-y-10">
+          {categories.map((cat) => (
+            <section key={cat.title}>
+              <h2 className="text-base font-medium text-zinc-400 uppercase tracking-widest mb-4">
+                {cat.title}
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {cat.indicators.map((ind) => (
+                  <IndicatorCard key={ind.label} indicator={ind} />
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      </div>
+    </main>
+  );
+}
+
+function IndicatorCard({ indicator }: { indicator: Indicator }) {
+  return (
+    <article className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 hover:border-zinc-700 transition-colors">
+      <div className="flex items-start justify-between mb-3">
+        <div className="min-w-0">
+          <p className="text-xs text-zinc-500 uppercase tracking-wider truncate">
+            {indicator.source}
           </p>
+          <p className="text-lg font-medium mt-1 truncate">{indicator.label}</p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+        <span
+          className={`shrink-0 text-xs px-2 py-1 rounded-md ${
+            indicator.ok
+              ? "text-emerald-400 bg-emerald-400/10"
+              : "text-red-400 bg-red-400/10"
+          }`}
+        >
+          {indicator.ok ? "En vivo" : "Error"}
+        </span>
+      </div>
+
+      {indicator.ok && indicator.value !== null ? (
+        <>
+          <p className="text-3xl font-semibold tabular-nums">
+            {indicator.value.toLocaleString("es-CO", {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}
+          </p>
+          <p className="text-sm text-zinc-400 mt-1">
+            {indicator.unit || "\u00A0"}
+          </p>
+        </>
+      ) : (
+        <p className="text-sm text-red-400">No se pudo cargar</p>
+      )}
+    </article>
   );
 }
