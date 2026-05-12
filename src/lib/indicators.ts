@@ -38,18 +38,18 @@ async function fetchBanrep(idMenu: number) {
 function formatDate(raw: unknown): string | undefined {
   if (raw === null || raw === undefined) return undefined;
 
+  const MESES = [
+    "ene", "feb", "mar", "abr", "may", "jun",
+    "jul", "ago", "sep", "oct", "nov", "dic",
+  ];
+
   if (typeof raw === "string") {
     const ddmmyyyy = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
     if (ddmmyyyy) {
       const [, day, month, year] = ddmmyyyy;
-      const d = new Date(Number(year), Number(month) - 1, Number(day));
-      if (!isNaN(d.getTime())) {
-        return d.toLocaleDateString("es-CO", {
-          day: "numeric",
-          month: "short",
-          year: "numeric",
-          timeZone: "America/Bogota",
-        });
+      const m = Number(month);
+      if (m >= 1 && m <= 12) {
+        return `${Number(day)} de ${MESES[m - 1]} de ${year}`;
       }
     }
 
@@ -58,14 +58,18 @@ function formatDate(raw: unknown): string | undefined {
     }
   }
 
-  const d = typeof raw === "number" ? new Date(raw) : new Date(String(raw));
-  if (isNaN(d.getTime())) return undefined;
-  return d.toLocaleDateString("es-CO", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    timeZone: "America/Bogota",
-  });
+  if (typeof raw === "number") {
+    const d = new Date(raw);
+    if (isNaN(d.getTime())) return undefined;
+    return d.toLocaleDateString("es-CO", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      timeZone: "America/Bogota",
+    });
+  }
+
+  return undefined;
 }
 
 function ok(
