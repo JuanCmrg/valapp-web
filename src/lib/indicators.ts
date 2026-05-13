@@ -23,6 +23,7 @@ export type Indicator = {
   preMarketPrice?: number;
   preMarketChange?: number;
   preMarketChangePercent?: number;
+  intradaySeries?: number[];
 };
 
 const BANREP_BASE =
@@ -260,6 +261,15 @@ export function getYahoo(symbol: string, label: string): Promise<Indicator> {
       const closes: (number | null)[] | undefined =
         result?.indicators?.quote?.[0]?.close;
       const regularMarketTime: number | undefined = meta?.regularMarketTime;
+
+      if (Array.isArray(closes)) {
+        const validCloses = closes.filter(
+          (c): c is number => typeof c === "number" && c > 0
+        );
+        if (validCloses.length >= 5) {
+          extras.intradaySeries = validCloses;
+        }
+      }
 
       if (
         Array.isArray(timestamps) &&
