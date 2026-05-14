@@ -182,43 +182,9 @@ export const getTrm = () =>
   );
 
 export const getUvr = () =>
-  withCacheFallback("uvr", async () => {
-    try {
-      const data = await fetchBanrep(100005);
-      const series: any[] = data?.SERIES ?? [];
-
-      // BanRep publica valores futuros; hay que quedarse con hoy o el más reciente pasado
-      const todayStr = new Intl.DateTimeFormat("en-CA", {
-        timeZone: "America/Bogota",
-      }).format(new Date()); // "2026-05-14"
-      const today = new Date(todayStr);
-
-      let best: { serie: any; date: Date } | null = null;
-
-      for (const serie of series) {
-        const raw = serie?.fecha ?? serie?.fechaFinal ?? serie?.fechaInicio;
-        if (!raw || typeof raw !== "string") continue;
-        const m = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-        if (!m) continue;
-        const [, day, month, year] = m;
-        const d = new Date(`${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`);
-        if (d <= today && (!best || d > best.date)) {
-          best = { serie, date: d };
-        }
-      }
-
-      if (!best) throw new Error("Sin valor de UVR para hoy");
-
-      return ok("UVR", "Banco de la República", Number(best.serie.valor), "COP/UVR", {
-        statusLabel: "Oficial",
-        marketState: undefined,
-        referenceDate: formatDate(best.serie.fecha ?? best.serie.fechaFinal),
-        dateLabel: "Vigente",
-      });
-    } catch (e) {
-      return fail("UVR", "Banco de la República", "COP/UVR", e);
-    }
-  });
+  withCacheFallback("uvr", () =>
+    banrepSeries("UVR", 100005, "COP/UVR", { dateLabel: "Vigente" })
+  );
 
 export const getSmmlv = () =>
   withCacheFallback("smmlv", () =>
