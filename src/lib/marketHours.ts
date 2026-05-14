@@ -65,6 +65,12 @@ export function getMarketState(
   at: Date = new Date()
 ): MarketState {
   switch (exchange) {
+    case "NYSE_INDEX": {
+      const { minutes, isWeekend } = partsInZone(at, "America/New_York");
+      if (isWeekend) return "closed";
+      if (within(minutes, m(9, 30), m(16, 0))) return "live";
+      return "closed"; // sin AH ni pre-market
+    }
     case "NYSE": {
       const { minutes, isWeekend } = partsInZone(at, "America/New_York");
       if (isWeekend) return "closed";
