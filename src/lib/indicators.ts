@@ -185,63 +185,56 @@ export const getUvr = () =>
   withCacheFallback("uvr", async () => {
     try {
       const data = await fetchBanrep(100005);
-      const series: any[] = data?.SERIES ?? [];
+      const serie = data?.SERIES?.[0];
+      if (!serie) throw new Error("Sin SERIES");
 
-      if (series.length === 0) throw new Error("Sin series de UVR");
+      // Buscar el array [[timestamp, valor], ...] dentro de la serie.
+      // No asumimos el nombre del campo — lo detectamos por forma.
+      let datos: [number, number][] | null = null;
+      for (const v of Object.values(serie)) {
+        if (
+          Array.isArray(v) &&
+          v.length > 0 &&
+          Array.isArray(v[0]) &&
+          v[0].length === 2 &&
+          typeof v[0][0] === "number" &&
+          typeof v[0][1] === "number"
+        ) {
+          datos = v as [number, number][];
+          break;
+        }
+      }
+      if (!datos || datos.length === 0) {
+        throw new Error("Sin puntos en la serie de UVR");
+      }
 
-      const todayStr = new Intl.DateTimeFormat("en-CA", {
+      // Fecha de hoy en Bogotá (Colombia no usa DST → UTC-5)
+      const todayYmd = new Intl.DateTimeFormat("en-CA", {
         timeZone: "America/Bogota",
       }).format(new Date()); // "2026-05-14"
+      const tomorrowBogotaMs =
+        new Date(`${todayYmd}T05:00:00Z`).getTime() + 86_400_000;
 
-      function parseSerieDate(serie: any): Date | null {
-        const raw =
-          serie?.fecha ?? serie?.fechaFinal ?? serie?.fechaInicio ?? null;
-        if (!raw || typeof raw !== "string") return null;
-        // dd/mm/yyyy
-        const m = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-        if (m) {
-          const [, day, month, year] = m;
-          return new Date(
-            `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`
-          );
-        }
-        // yyyy-mm-dd
-        if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return new Date(raw);
-        return null;
-      }
-
-      const today = new Date(todayStr);
-      let best: { serie: any; date: Date } | null = null;
-
-      for (const serie of series) {
-        if (serie?.valor === undefined) continue;
-        const d = parseSerieDate(serie);
-        if (!d || isNaN(d.getTime())) continue;
-        if (d <= today && (!best || d > best.date)) {
-          best = { serie, date: d };
+      // Punto más reciente cuya fecha sea ≤ hoy
+      let best: [number, number] | null = null;
+      for (const point of datos) {
+        if (point[0] < tomorrowBogotaMs && (!best || point[0] > best[0])) {
+          best = point;
         }
       }
+      if (!best) throw new Error("Sin valor de UVR para hoy");
 
-      // Fallback: si ninguna fecha parseó, usar SERIES[0] como antes
-      if (!best) {
-        const serie = series[0];
-        if (serie?.valor === undefined) throw new Error("Sin valor de UVR");
-        return ok("UVR", "Banco de la República", Number(serie.valor), "COP/UVR", {
-          statusLabel: "Oficial",
-          marketState: undefined,
-          referenceDate: formatDate(
-            serie?.fecha ?? serie?.fechaFinal ?? serie?.fechaInicio
-          ),
-          dateLabel: "Vigente",
-        });
-      }
+      // Convertir el timestamp a "dd/mm/yyyy" para que formatDate lo formatee
+      // igual que TRM ("14 de may de 2026")
+      const bestYmd = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "America/Bogota",
+      }).format(new Date(best[0])); // "2026-05-14"
+      const [by, bm, bd] = bestYmd.split("-");
 
-      return ok("UVR", "Banco de la República", Number(best.serie.valor), "COP/UVR", {
+      return ok("UVR", "Banco de la República", best[1], "COP/UVR", {
         statusLabel: "Oficial",
         marketState: undefined,
-        referenceDate: formatDate(
-          best.serie.fecha ?? best.serie.fechaFinal ?? best.serie.fechaInicio
-        ),
+        referenceDate: formatDate(`${bd}/${bm}/${by}`),
         dateLabel: "Vigente",
       });
     } catch (e) {
@@ -296,7 +289,7 @@ export function getYahoo(symbol: string, label: string): Promise<Indicator> {
   return withCacheFallback(`yahoo:${symbol}`, async () => {
     try {
       const res = await fetch(
-        `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?includePrePost=true&interval=5m&range=1d`,
+        `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?includePrePost=true&interval=1m&range=1d`,
         { headers: { "User-Agent": "Mozilla/5.0" }, cache: "no-store" }
       );
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -325,37 +318,79 @@ export function getYahoo(symbol: string, label: string): Promise<Indicator> {
         result?.indicators?.quote?.[0]?.close;
       const regularMarketTime: number | undefined = meta?.regularMarketTime;
 
+      // Sparkline intradía (filtramos a barras regulares para que se vea limpia)
       if (Array.isArray(closes)) {
-        const validCloses = closes.filter(
-          (c): c is number => typeof c === "number" && c > 0
-        );
-        if (validCloses.length >= 5) {
-          extras.intradaySeries = validCloses;
+        let regularCloses: number[];
+        if (Array.isArray(timestamps) && typeof regularMarketTime === "number") {
+          regularCloses = [];
+          for (let i = 0; i < closes.length; i++) {
+            const c = closes[i];
+            if (
+              typeof c === "number" &&
+              c > 0 &&
+              timestamps[i] <= regularMarketTime
+            ) {
+              regularCloses.push(c);
+            }
+          }
+        } else {
+          regularCloses = closes.filter(
+            (c): c is number => typeof c === "number" && c > 0
+          );
+        }
+        if (regularCloses.length >= 5) {
+          extras.intradaySeries = regularCloses;
         }
       }
 
+      // 1) Pre-market — desde meta si Yahoo lo expone
       if (
+        typeof meta.preMarketPrice === "number" &&
+        meta.preMarketPrice > 0 &&
+        Math.abs(meta.preMarketPrice - price) > 0.001
+      ) {
+        extras.preMarketPrice = meta.preMarketPrice;
+        extras.preMarketChange =
+          typeof meta.preMarketChange === "number"
+            ? meta.preMarketChange
+            : meta.preMarketPrice - price;
+        extras.preMarketChangePercent =
+          typeof meta.preMarketChangePercent === "number"
+            ? meta.preMarketChangePercent
+            : ((meta.preMarketPrice - price) / price) * 100;
+      }
+
+      // 2) After-hours — primero desde meta…
+      if (typeof meta.postMarketPrice === "number" && meta.postMarketPrice > 0) {
+        extras.afterHoursPrice = meta.postMarketPrice;
+        extras.afterHoursChange =
+          typeof meta.postMarketChange === "number"
+            ? meta.postMarketChange
+            : meta.postMarketPrice - price;
+        extras.afterHoursChangePercent =
+          typeof meta.postMarketChangePercent === "number"
+            ? meta.postMarketChangePercent
+            : ((meta.postMarketPrice - price) / price) * 100;
+      }
+
+      // …y si meta no lo trae, escanear las barras intradía (último tick AH)
+      if (
+        extras.afterHoursPrice === undefined &&
         Array.isArray(timestamps) &&
         Array.isArray(closes) &&
         typeof regularMarketTime === "number" &&
         timestamps.length === closes.length
       ) {
-        let postClose: number | undefined;
         for (let i = timestamps.length - 1; i >= 0; i--) {
           if (timestamps[i] > regularMarketTime) {
             const c = closes[i];
             if (typeof c === "number" && c > 0) {
-              postClose = c;
+              extras.afterHoursPrice = c;
+              extras.afterHoursChange = c - price;
+              extras.afterHoursChangePercent = ((c - price) / price) * 100;
               break;
             }
           }
-        }
-
-        if (postClose !== undefined && Math.abs(postClose - price) > 0.001) {
-          const ahChange = postClose - price;
-          extras.afterHoursPrice = postClose;
-          extras.afterHoursChange = ahChange;
-          extras.afterHoursChangePercent = (ahChange / price) * 100;
         }
       }
 
