@@ -9,6 +9,7 @@ import {
   type Indicator,
 } from "@/lib/indicators";
 import RefreshButton from "./RefreshButton";
+import { InstallButton } from "./InstallButton";
 import { Dashboard } from "./Dashboard";
 
 type Category = { title: string; indicators: Indicator[] };
@@ -79,7 +80,10 @@ export default async function Home() {
               Monitor de mercado · actualizado {updated}
             </p>
           </div>
-          <RefreshButton />
+          <div className="flex items-center gap-2">
+            <InstallButton />
+            <RefreshButton />
+          </div>
         </header>
 
         <Dashboard categories={categories} />

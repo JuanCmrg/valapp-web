@@ -45,7 +45,9 @@ export function IndicatorCard({
           <p className="text-xs text-zinc-500 uppercase tracking-wider truncate">
             {indicator.source}
           </p>
-          <p className="text-lg font-medium mt-1 truncate">{indicator.label}</p>
+          <p className="text-lg font-medium mt-1 leading-tight text-balance break-words">
+            {indicator.label}
+          </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <span

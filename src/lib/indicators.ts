@@ -343,52 +343,68 @@ export function getYahoo(symbol: string, label: string): Promise<Indicator> {
         }
       }
 
-      // 1) Pre-market — desde meta si Yahoo lo expone
-      if (
-        typeof meta.preMarketPrice === "number" &&
-        meta.preMarketPrice > 0 &&
-        Math.abs(meta.preMarketPrice - price) > 0.001
-      ) {
-        extras.preMarketPrice = meta.preMarketPrice;
-        extras.preMarketChange =
-          typeof meta.preMarketChange === "number"
-            ? meta.preMarketChange
-            : meta.preMarketPrice - price;
-        extras.preMarketChangePercent =
-          typeof meta.preMarketChangePercent === "number"
-            ? meta.preMarketChangePercent
-            : ((meta.preMarketPrice - price) / price) * 100;
-      }
+// Solo las acciones de NYSE tienen pre-market / after-hours reales.
+      // Los índices no se negocian (son calculados), el forex y los futuros
+      // operan ~24/5 sin "AH". El resto de plazas (BVC, TSE, B3) no exponen
+      // AH/PM por Yahoo de forma confiable.
+      const supportsAhPm = exchange === "NYSE";
 
-      // 2) After-hours — primero desde meta…
-      if (typeof meta.postMarketPrice === "number" && meta.postMarketPrice > 0) {
-        extras.afterHoursPrice = meta.postMarketPrice;
-        extras.afterHoursChange =
-          typeof meta.postMarketChange === "number"
-            ? meta.postMarketChange
-            : meta.postMarketPrice - price;
-        extras.afterHoursChangePercent =
-          typeof meta.postMarketChangePercent === "number"
-            ? meta.postMarketChangePercent
-            : ((meta.postMarketPrice - price) / price) * 100;
-      }
+      if (supportsAhPm) {
+        // 1) Pre-market — desde meta si Yahoo lo expone
+        if (
+          typeof meta.preMarketPrice === "number" &&
+          meta.preMarketPrice > 0 &&
+          Math.abs(meta.preMarketPrice - price) > 0.001
+        ) {
+          extras.preMarketPrice = meta.preMarketPrice;
+          extras.preMarketChange =
+            typeof meta.preMarketChange === "number"
+              ? meta.preMarketChange
+              : meta.preMarketPrice - price;
+          extras.preMarketChangePercent =
+            typeof meta.preMarketChangePercent === "number"
+              ? meta.preMarketChangePercent
+              : ((meta.preMarketPrice - price) / price) * 100;
+        }
 
-      // …y si meta no lo trae, escanear las barras intradía (último tick AH)
-      if (
-        extras.afterHoursPrice === undefined &&
-        Array.isArray(timestamps) &&
-        Array.isArray(closes) &&
-        typeof regularMarketTime === "number" &&
-        timestamps.length === closes.length
-      ) {
-        for (let i = timestamps.length - 1; i >= 0; i--) {
-          if (timestamps[i] > regularMarketTime) {
-            const c = closes[i];
-            if (typeof c === "number" && c > 0) {
-              extras.afterHoursPrice = c;
-              extras.afterHoursChange = c - price;
-              extras.afterHoursChangePercent = ((c - price) / price) * 100;
-              break;
+        // 2) After-hours — primero desde meta…
+        if (
+          typeof meta.postMarketPrice === "number" &&
+          meta.postMarketPrice > 0 &&
+          Math.abs(meta.postMarketPrice - price) > 0.001
+        ) {
+          extras.afterHoursPrice = meta.postMarketPrice;
+          extras.afterHoursChange =
+            typeof meta.postMarketChange === "number"
+              ? meta.postMarketChange
+              : meta.postMarketPrice - price;
+          extras.afterHoursChangePercent =
+            typeof meta.postMarketChangePercent === "number"
+              ? meta.postMarketChangePercent
+              : ((meta.postMarketPrice - price) / price) * 100;
+        }
+
+        // …y si meta no lo trae, escanear las barras intradía (último tick AH)
+        if (
+          extras.afterHoursPrice === undefined &&
+          Array.isArray(timestamps) &&
+          Array.isArray(closes) &&
+          typeof regularMarketTime === "number" &&
+          timestamps.length === closes.length
+        ) {
+          for (let i = timestamps.length - 1; i >= 0; i--) {
+            if (timestamps[i] > regularMarketTime) {
+              const c = closes[i];
+              if (
+                typeof c === "number" &&
+                c > 0 &&
+                Math.abs(c - price) > 0.001
+              ) {
+                extras.afterHoursPrice = c;
+                extras.afterHoursChange = c - price;
+                extras.afterHoursChangePercent = ((c - price) / price) * 100;
+                break;
+              }
             }
           }
         }

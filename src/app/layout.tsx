@@ -12,6 +12,27 @@ export const metadata: Metadata = {
     statusBarStyle: "black-translucent",
     title: "VALAPP",
   },
+  icons: {
+    icon: [
+      {
+        url: "/web-app-manifest-192x192.png",
+        sizes: "192x192",
+        type: "image/png",
+      },
+      {
+        url: "/web-app-manifest-512x512.png",
+        sizes: "512x512",
+        type: "image/png",
+      },
+    ],
+    apple: [
+      {
+        url: "/web-app-manifest-192x192.png",
+        sizes: "192x192",
+        type: "image/png",
+      },
+    ],
+  },
   openGraph: {
     type: "website",
     title: "VALAPP",
