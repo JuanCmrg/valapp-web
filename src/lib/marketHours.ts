@@ -3,9 +3,9 @@ export type Exchange = "NYSE" | "BVC" | "TSE" | "B3" | "FOREX" | "CME";
 export type MarketState = "live" | "afterhours" | "closed";
 
 const EXCHANGE_BY_TICKER: Record<string, Exchange> = {
-  "^GSPC": "NYSE",
-  "^IXIC": "NYSE",
-  "^NDX": "NYSE",
+  "^GSPC": "NYSE_INDEX",
+  "^IXIC": "NYSE_INDEX",
+  "^NDX": "NYSE_INDEX",
   NVDA: "NYSE",
   TSLA: "NYSE",
   AMZN: "NYSE",
