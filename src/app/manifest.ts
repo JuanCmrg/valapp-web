@@ -3,7 +3,7 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "VALAPP - Monitor de mercado",
+    name: "VALAPP",
     short_name: "VALAPP",
     description:
       "Indicadores macro de Colombia, índices, acciones, forex y commodities en tiempo real.",
