@@ -1,4 +1,4 @@
-export type Exchange = "NYSE" | "BVC" | "TSE" | "B3" | "FOREX" | "CME";
+export type Exchange = "NYSE_INDEX" | "NYSE" | "BVC" | "TSE" | "B3" | "FOREX" | "CME";
 
 export type MarketState = "live" | "afterhours" | "closed";
 
