@@ -187,32 +187,61 @@ export const getUvr = () =>
       const data = await fetchBanrep(100005);
       const series: any[] = data?.SERIES ?? [];
 
-      // BanRep publica valores futuros; hay que quedarse con hoy o el más reciente pasado
+      if (series.length === 0) throw new Error("Sin series de UVR");
+
       const todayStr = new Intl.DateTimeFormat("en-CA", {
         timeZone: "America/Bogota",
       }).format(new Date()); // "2026-05-14"
-      const today = new Date(todayStr);
 
+      function parseSerieDate(serie: any): Date | null {
+        const raw =
+          serie?.fecha ?? serie?.fechaFinal ?? serie?.fechaInicio ?? null;
+        if (!raw || typeof raw !== "string") return null;
+        // dd/mm/yyyy
+        const m = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+        if (m) {
+          const [, day, month, year] = m;
+          return new Date(
+            `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`
+          );
+        }
+        // yyyy-mm-dd
+        if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return new Date(raw);
+        return null;
+      }
+
+      const today = new Date(todayStr);
       let best: { serie: any; date: Date } | null = null;
 
       for (const serie of series) {
-        const raw = serie?.fecha ?? serie?.fechaFinal ?? serie?.fechaInicio;
-        if (!raw || typeof raw !== "string") continue;
-        const m = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-        if (!m) continue;
-        const [, day, month, year] = m;
-        const d = new Date(`${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`);
+        if (serie?.valor === undefined) continue;
+        const d = parseSerieDate(serie);
+        if (!d || isNaN(d.getTime())) continue;
         if (d <= today && (!best || d > best.date)) {
           best = { serie, date: d };
         }
       }
 
-      if (!best) throw new Error("Sin valor de UVR para hoy");
+      // Fallback: si ninguna fecha parseó, usar SERIES[0] como antes
+      if (!best) {
+        const serie = series[0];
+        if (serie?.valor === undefined) throw new Error("Sin valor de UVR");
+        return ok("UVR", "Banco de la República", Number(serie.valor), "COP/UVR", {
+          statusLabel: "Oficial",
+          marketState: undefined,
+          referenceDate: formatDate(
+            serie?.fecha ?? serie?.fechaFinal ?? serie?.fechaInicio
+          ),
+          dateLabel: "Vigente",
+        });
+      }
 
       return ok("UVR", "Banco de la República", Number(best.serie.valor), "COP/UVR", {
         statusLabel: "Oficial",
         marketState: undefined,
-        referenceDate: formatDate(best.serie.fecha ?? best.serie.fechaFinal),
+        referenceDate: formatDate(
+          best.serie.fecha ?? best.serie.fechaFinal ?? best.serie.fechaInicio
+        ),
         dateLabel: "Vigente",
       });
     } catch (e) {
