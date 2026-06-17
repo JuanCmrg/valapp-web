@@ -24,6 +24,8 @@ export type Indicator = {
   preMarketChange?: number;
   preMarketChangePercent?: number;
   intradaySeries?: number[];
+  history?: { value: number; referenceDate: string; dateLabel: string }[];
+  historyIndex?: number;
 };
 
 const BANREP_BASE =
@@ -177,9 +179,73 @@ async function banrepSeries(
 }
 
 export const getTrm = () =>
-  withCacheFallback("trm", () =>
-    banrepSeries("TRM", 1, "COP/USD", { dateLabel: "Vigente" })
-  );
+  withCacheFallback("trm", async () => {
+    try {
+      const data = await fetchBanrep(1);
+      const serie = data?.SERIES?.[0];
+      if (!serie) throw new Error("Sin SERIES");
+
+      // Detectar el array [[timestamp, valor], ...] por forma (igual que UVR)
+      let datos: [number, number][] | null = null;
+      for (const v of Object.values(serie)) {
+        if (
+          Array.isArray(v) &&
+          v.length > 0 &&
+          Array.isArray(v[0]) &&
+          v[0].length === 2 &&
+          typeof v[0][0] === "number" &&
+          typeof v[0][1] === "number"
+        ) {
+          datos = v as [number, number][];
+          break;
+        }
+      }
+      if (!datos || datos.length === 0) {
+        throw new Error("Sin puntos en la serie de TRM");
+      }
+
+      // Ordenar ascendente por timestamp por seguridad
+      datos.sort((a, b) => a[0] - b[0]);
+
+      // Construir el historial navegable con fechas formateadas
+      const history = datos.map(([ts, valor]) => {
+        const ymd = new Intl.DateTimeFormat("en-CA", {
+          timeZone: "America/Bogota",
+        }).format(new Date(ts)); // "2026-05-14"
+        const [y, mo, d] = ymd.split("-");
+        return {
+          value: valor,
+          referenceDate: formatDate(`${d}/${mo}/${y}`) ?? `${d}/${mo}/${y}`,
+          dateLabel: "Vigente",
+        };
+      });
+
+      // Encontrar el índice del punto vigente HOY (último con fecha ≤ hoy)
+      const todayYmd = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "America/Bogota",
+      }).format(new Date());
+      const tomorrowBogotaMs =
+        new Date(`${todayYmd}T05:00:00Z`).getTime() + 86_400_000;
+
+      let todayIdx = 0;
+      for (let i = 0; i < datos.length; i++) {
+        if (datos[i][0] < tomorrowBogotaMs) todayIdx = i;
+      }
+
+      const current = history[todayIdx];
+
+      return ok("TRM", "Banco de la República", current.value, "COP/USD", {
+        statusLabel: "Oficial",
+        marketState: undefined,
+        referenceDate: current.referenceDate,
+        dateLabel: "Vigente",
+        history,
+        historyIndex: todayIdx,
+      });
+    } catch (e) {
+      return fail("TRM", "Banco de la República", "COP/USD", e);
+    }
+  });
 
 export const getUvr = () =>
   withCacheFallback("uvr", async () => {

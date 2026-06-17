@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import type { Indicator } from "@/lib/indicators";
 import { ChangeLine } from "./ChangeLine";
 import { Sparkline } from "./Sparkline";
@@ -12,6 +15,24 @@ export function IndicatorCard({
   isFavorite: boolean;
   onToggleFavorite: () => void;
 }) {
+  // --- Navegación de historial (TRM y futuros indicadores BanRep) ---
+  const hasHistory =
+    indicator.history !== undefined &&
+    indicator.history.length > 1 &&
+    indicator.historyIndex !== undefined;
+
+  const [navIdx, setNavIdx] = useState(indicator.historyIndex ?? 0);
+
+  // Si hay historial, el punto mostrado sale de history[navIdx];
+  // si no, usamos los valores normales del indicador.
+  const point = hasHistory ? indicator.history![navIdx] : null;
+  const displayValue = point ? point.value : indicator.value;
+  const displayRefDate = point ? point.referenceDate : indicator.referenceDate;
+  const displayDateLabel = point ? point.dateLabel : indicator.dateLabel;
+
+  const atOldest = hasHistory && navIdx <= 0;
+  const atNewest = hasHistory && navIdx >= indicator.history!.length - 1;
+  const isToday = hasHistory && navIdx === indicator.historyIndex;
   const hasChange = indicator.changePercent !== undefined;
   const isUp = hasChange && indicator.changePercent! > 0;
   const isDown = hasChange && indicator.changePercent! < 0;
@@ -62,10 +83,10 @@ export function IndicatorCard({
         </div>
       </div>
 
-      {indicator.ok && indicator.value !== null ? (
+      {indicator.ok && displayValue !== null && displayValue !== undefined ? (
         <>
           <p className="text-3xl font-semibold tabular-nums">
-            {indicator.value.toLocaleString("es-CO", {
+            {displayValue.toLocaleString("es-CO", {
               minimumFractionDigits: 2,
               maximumFractionDigits: 2,
             })}
@@ -74,10 +95,43 @@ export function IndicatorCard({
             {indicator.unit || "\u00A0"}
           </p>
 
-          {indicator.referenceDate && (
-            <p className="text-xs text-zinc-500 mt-2">
-              {indicator.dateLabel ?? "Vigente"}: {indicator.referenceDate}
-            </p>
+          {hasHistory ? (
+            <div className="flex items-center gap-2 mt-2">
+              <button
+                onClick={() => setNavIdx((i) => Math.max(0, i - 1))}
+                disabled={atOldest}
+                aria-label="TRM anterior"
+                className="text-zinc-500 hover:text-zinc-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors px-1"
+              >
+                ◀
+              </button>
+              <p className="text-xs text-zinc-500 flex-1 text-center tabular-nums">
+                {displayDateLabel ?? "Vigente"}: {displayRefDate}
+                {!isToday && (
+                  <span className="ml-1 text-zinc-600">
+                    ({atNewest ? "futura" : "histórica"})
+                  </span>
+                )}
+              </p>
+              <button
+                onClick={() =>
+                  setNavIdx((i) =>
+                    Math.min(indicator.history!.length - 1, i + 1)
+                  )
+                }
+                disabled={atNewest}
+                aria-label="TRM siguiente"
+                className="text-zinc-500 hover:text-zinc-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors px-1"
+              >
+                ▶
+              </button>
+            </div>
+          ) : (
+            displayRefDate && (
+              <p className="text-xs text-zinc-500 mt-2">
+                {displayDateLabel ?? "Vigente"}: {displayRefDate}
+              </p>
+            )
           )}
 
           {indicator.stale && indicator.staleAgeMs !== undefined && (
