@@ -130,7 +130,7 @@ function CategorySection({
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {indicators.map((ind) => (
             <IndicatorCard
-              key={`${title}-${ind.label}`}
+              key={`${title}-${ind.label}-${ind.referenceDate ?? ""}`}
               indicator={ind}
               isFavorite={favorites.has(ind.label)}
               onToggleFavorite={() => onToggleFavorite(ind.label)}

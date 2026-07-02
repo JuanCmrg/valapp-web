@@ -40,11 +40,31 @@ const BANREP_HEADERS = {
     "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36",
 };
 
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit = {},
+  timeoutMs = 6000
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (e) {
+    if (e instanceof Error && e.name === "AbortError") {
+      throw new Error(`Timeout (${timeoutMs} ms)`);
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function fetchBanrep(idMenu: number) {
-  const res = await fetch(`${BANREP_BASE}${idMenu}`, {
-    headers: BANREP_HEADERS,
-    cache: "no-store",
-  });
+  const res = await fetchWithTimeout(
+    `${BANREP_BASE}${idMenu}`,
+    { headers: BANREP_HEADERS, cache: "no-store" },
+    8000
+  );
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
@@ -84,6 +104,17 @@ function formatDate(raw: unknown): string | undefined {
   }
 
   return undefined;
+}
+
+function downsample(data: number[], target = 60): number[] {
+  if (data.length <= target) return data;
+  const step = data.length / target;
+  const out: number[] = [];
+  for (let i = 0; i < target - 1; i++) {
+    out.push(data[Math.floor(i * step)]);
+  }
+  out.push(data[data.length - 1]); // conservar siempre el último tick
+  return out;
 }
 
 function ok(
@@ -232,15 +263,20 @@ export const getTrm = () =>
         if (datos[i][0] < tomorrowBogotaMs) todayIdx = i;
       }
 
-      const current = history[todayIdx];
+      const HISTORY_WINDOW = 30;
+      const start = Math.max(0, history.length - HISTORY_WINDOW);
+      const trimmedHistory = history.slice(start);
+      const trimmedIdx = Math.max(0, todayIdx - start);
+
+      const current = trimmedHistory[trimmedIdx];
 
       return ok("TRM", "Banco de la República", current.value, "COP/USD", {
         statusLabel: "Oficial",
         marketState: undefined,
         referenceDate: current.referenceDate,
         dateLabel: "Vigente",
-        history,
-        historyIndex: todayIdx,
+        history: trimmedHistory,
+        historyIndex: trimmedIdx,
       });
     } catch (e) {
       return fail("TRM", "Banco de la República", "COP/USD", e);
@@ -329,9 +365,10 @@ export const getIpc12 = () =>
 export function getIpcMensual(): Promise<Indicator> {
   return withCacheFallback("ipcMensual", async () => {
     try {
-      const res = await fetch(
+      const res = await fetchWithTimeout(
         "https://sen.dane.gov.co/services_ipc/rest/IpcServices/getLastTotVariation",
-        { cache: "no-store" }
+        { cache: "no-store" },
+        6000
       );
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
@@ -354,9 +391,10 @@ export function getIpcMensual(): Promise<Indicator> {
 export function getYahoo(symbol: string, label: string): Promise<Indicator> {
   return withCacheFallback(`yahoo:${symbol}`, async () => {
     try {
-      const res = await fetch(
+      const res = await fetchWithTimeout(
         `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?includePrePost=true&interval=1m&range=1d`,
-        { headers: { "User-Agent": "Mozilla/5.0" }, cache: "no-store" }
+        { headers: { "User-Agent": "Mozilla/5.0" }, cache: "no-store" },
+        5000
       );
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
@@ -405,7 +443,7 @@ export function getYahoo(symbol: string, label: string): Promise<Indicator> {
           );
         }
         if (regularCloses.length >= 5) {
-          extras.intradaySeries = regularCloses;
+          extras.intradaySeries = downsample(regularCloses);
         }
       }
 
