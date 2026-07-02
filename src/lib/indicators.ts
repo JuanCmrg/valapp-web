@@ -158,11 +158,11 @@ async function withCacheFallback(
 ): Promise<Indicator> {
   const fresh = await fetcher();
   if (fresh.ok) {
-    rememberSuccess(cacheKey, fresh);
+    await rememberSuccess(cacheKey, fresh);
     return fresh;
   }
 
-  const stale = getStale(cacheKey);
+  const stale = await getStale(cacheKey);
   if (stale) {
     return {
       ...stale.indicator,
