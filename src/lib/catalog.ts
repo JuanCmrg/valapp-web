@@ -15,6 +15,8 @@ export type BanrepDef = {
   derive?: "monthlyVariation";
   dateLabel: string;
   description: string;
+  /** Página propia en el portal del Banrep. No todas las series tienen una. */
+  sourcePath?: string;
 };
 
 export type YahooDef = {
@@ -59,6 +61,7 @@ export const CATALOG: IndicatorDef[] = [
   banrep({
     id: "trm",
     label: "TRM",
+    sourcePath: "informacionSerie/1/tasa_cambio_peso_colombiano_trm",
     idSerie: 1,
     unit: "COP/USD",
     decimals: 2,
@@ -70,6 +73,7 @@ export const CATALOG: IndicatorDef[] = [
   banrep({
     id: "tpm",
     label: "Tasa de política monetaria",
+    sourcePath: "informacionSerie/59/tasas_interes_politica_monetaria",
     idSerie: 59,
     unit: "% E.A.",
     decimals: 2,

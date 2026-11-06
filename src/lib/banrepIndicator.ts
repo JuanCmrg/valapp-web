@@ -84,7 +84,7 @@ export function indicatorFromSeries(
     label: def.label,
     category: def.category,
     source,
-    sourceUrl: `https://suameca.banrep.gov.co/estadisticas-economicas/informacionSerie/${def.idSerie}/`,
+    sourceUrl: `https://suameca.banrep.gov.co/estadisticas-economicas/${def.sourcePath ?? ""}`,
     description: def.description,
     value,
     unit: def.unit,
