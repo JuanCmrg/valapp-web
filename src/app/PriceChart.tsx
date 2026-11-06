@@ -300,7 +300,7 @@ export function PriceChart({
           <Stat label={`Mínimo (${range})`} value={fmtNum(geometry.lo, decimals)} />
           <Stat label={`Máximo (${range})`} value={fmtNum(geometry.hi, decimals)} />
           <Stat
-            label={`Variación (${range})`}
+            label={range === "1D" ? "Desde la apertura" : `Variación (${range})`}
             value={first ? `${fmtSigned(((last - first) / first) * 100)}%` : "—"}
           />
         </dl>
