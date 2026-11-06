@@ -1,19 +1,36 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 };
 
+const noopSubscribe = () => () => {};
+
+function detectStandalone() {
+  return (
+    window.matchMedia("(display-mode: standalone)").matches ||
+    (window.navigator as Navigator & { standalone?: boolean }).standalone === true
+  );
+}
+
+function detectIos() {
+  return (
+    /iPhone|iPad|iPod/.test(window.navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
+  );
+}
+
 export function InstallButton() {
   const [deferredPrompt, setDeferredPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
-  const [isIos, setIsIos] = useState(false);
-  const [isStandalone, setIsStandalone] = useState(false);
+  const [installed, setInstalled] = useState(false);
   const [showIosHelp, setShowIosHelp] = useState(false);
-  const [hydrated, setHydrated] = useState(false);
+  // Valores del navegador: en el servidor no existen.
+  const isStandalone = useSyncExternalStore(noopSubscribe, detectStandalone, () => false);
+  const isIos = useSyncExternalStore(noopSubscribe, detectIos, () => false);
 
   useEffect(() => {
     // Registrar service worker (necesario para que Android dispare beforeinstallprompt)
@@ -21,19 +38,6 @@ export function InstallButton() {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
     }
 
-    const standalone =
-      window.matchMedia("(display-mode: standalone)").matches ||
-      (window.navigator as Navigator & { standalone?: boolean }).standalone ===
-        true;
-    setIsStandalone(standalone);
-
-    const ua = window.navigator.userAgent;
-    const ios =
-      /iPhone|iPad|iPod/.test(ua) ||
-      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-    setIsIos(ios);
-
-    setHydrated(true);
 
     const onBeforeInstall = (e: Event) => {
       e.preventDefault();
@@ -43,7 +47,7 @@ export function InstallButton() {
 
     const onInstalled = () => {
       setDeferredPrompt(null);
-      setIsStandalone(true);
+      setInstalled(true);
     };
     window.addEventListener("appinstalled", onInstalled);
 
@@ -63,7 +67,7 @@ export function InstallButton() {
     if (isIos) setShowIosHelp(true);
   };
 
-  if (!hydrated || isStandalone) return null;
+  if (isStandalone || installed) return null;
 
   const canInstall = !!deferredPrompt || isIos;
   if (!canInstall) return null;
@@ -74,7 +78,7 @@ export function InstallButton() {
         onClick={handleClick}
         aria-label="Instalar VALAPP"
         title="Instalar VALAPP"
-        className="inline-flex items-center gap-2 text-xs text-zinc-400 hover:text-zinc-200 border border-zinc-800 hover:border-zinc-700 rounded-lg px-3 py-2 transition-colors"
+        className="inline-flex items-center gap-2 text-xs text-ink-2 hover:text-ink border border-line hover:border-line-strong rounded-lg px-3 py-2 transition-colors"
       >
         <svg
           className="w-4 h-4"
@@ -100,22 +104,22 @@ export function InstallButton() {
           aria-modal="true"
         >
           <div
-            className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 max-w-sm w-full"
+            className="bg-surface border border-line rounded-2xl p-6 max-w-sm w-full"
             onClick={(e) => e.stopPropagation()}
           >
             <p className="text-lg font-medium mb-1">Añadir a pantalla de inicio</p>
-            <p className="text-xs text-zinc-500 mb-5">
+            <p className="text-xs text-ink-3 mb-5">
               Tienes que abrir VALAPP en <strong>Safari</strong> (no funciona desde
               Chrome u otros navegadores en iOS).
             </p>
-            <ol className="space-y-4 text-sm text-zinc-300">
+            <ol className="space-y-4 text-sm text-ink">
               <li className="flex items-start gap-3">
-                <span className="bg-zinc-800 text-zinc-300 rounded-full w-6 h-6 flex items-center justify-center text-xs shrink-0 mt-0.5">
+                <span className="bg-surface-2 text-ink rounded-full w-6 h-6 flex items-center justify-center text-xs shrink-0 mt-0.5">
                   1
                 </span>
                 <span className="flex-1">
                   Toca el botón{" "}
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-zinc-800 rounded">
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-surface-2 rounded">
                     <svg
                       className="w-3.5 h-3.5"
                       viewBox="0 0 24 24"
@@ -135,7 +139,7 @@ export function InstallButton() {
                 </span>
               </li>
               <li className="flex items-start gap-3">
-                <span className="bg-zinc-800 text-zinc-300 rounded-full w-6 h-6 flex items-center justify-center text-xs shrink-0 mt-0.5">
+                <span className="bg-surface-2 text-ink rounded-full w-6 h-6 flex items-center justify-center text-xs shrink-0 mt-0.5">
                   2
                 </span>
                 <span className="flex-1">
@@ -143,7 +147,7 @@ export function InstallButton() {
                 </span>
               </li>
               <li className="flex items-start gap-3">
-                <span className="bg-zinc-800 text-zinc-300 rounded-full w-6 h-6 flex items-center justify-center text-xs shrink-0 mt-0.5">
+                <span className="bg-surface-2 text-ink rounded-full w-6 h-6 flex items-center justify-center text-xs shrink-0 mt-0.5">
                   3
                 </span>
                 <span className="flex-1">
@@ -153,7 +157,7 @@ export function InstallButton() {
             </ol>
             <button
               onClick={() => setShowIosHelp(false)}
-              className="mt-6 w-full bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-sm font-medium py-2 rounded-lg transition-colors"
+              className="mt-6 w-full bg-accent hover:opacity-90 text-on-accent text-sm font-medium py-2 rounded-lg transition-colors"
             >
               Entendido
             </button>

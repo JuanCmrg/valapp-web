@@ -1,11 +1,13 @@
-export type Exchange = "NYSE_INDEX" | "NYSE" | "BVC" | "TSE" | "B3" | "FOREX" | "CME";
+import type { MarketState } from "./types";
 
-export type MarketState = "live" | "afterhours" | "closed";
+export type Exchange = "NYSE_INDEX" | "NYSE" | "BVC" | "TSE" | "B3" | "FOREX" | "CME" | "ICE_SOFTS" | "CRYPTO";
 
 const EXCHANGE_BY_TICKER: Record<string, Exchange> = {
   "^GSPC": "NYSE_INDEX",
   "^IXIC": "NYSE_INDEX",
   "^NDX": "NYSE_INDEX",
+  "^DJI": "NYSE_INDEX",
+  "^VIX": "NYSE_INDEX",
   NVDA: "NYSE",
   TSLA: "NYSE",
   AMZN: "NYSE",
@@ -14,9 +16,12 @@ const EXCHANGE_BY_TICKER: Record<string, Exchange> = {
   BLK: "NYSE",
   "ECOPETROL.CL": "BVC",
   "PFCIBEST.CL": "BVC",
+  "ICOLCAP.CL": "BVC",
   "^N225": "TSE",
   "^BVSP": "B3",
   "COP=X": "FOREX",
+  "EURCOP=X": "FOREX",
+  "DX-Y.NYB": "FOREX",
   "EURUSD=X": "FOREX",
   "CHF=X": "FOREX",
   "MXN=X": "FOREX",
@@ -25,6 +30,10 @@ const EXCHANGE_BY_TICKER: Record<string, Exchange> = {
   "CL=F": "CME",
   "BZ=F": "CME",
   "GC=F": "CME",
+  "SI=F": "CME",
+  "KC=F": "ICE_SOFTS",
+  "BTC-USD": "CRYPTO",
+  "ETH-USD": "CRYPTO",
 };
 
 export function exchangeOf(ticker: string): Exchange | null {
@@ -116,13 +125,50 @@ export function getMarketState(
       if (within(ny.minutes, m(17, 0), m(18, 0))) return "closed";
       return "live";
     }
+    case "ICE_SOFTS": {
+      // Café arábica en ICE: 4:15 a. m. a 1:30 p. m. de Nueva York.
+      const { minutes, isWeekend } = partsInZone(at, "America/New_York");
+      if (isWeekend) return "closed";
+      return within(minutes, m(4, 15), m(13, 30)) ? "live" : "closed";
+    }
+    case "CRYPTO":
+      return "live";
   }
+}
+
+export type TradingPeriods = {
+  pre?: { start: number; end: number };
+  regular?: { start: number; end: number };
+  post?: { start: number; end: number };
+};
+
+const inPeriod = (t: number, p?: { start: number; end: number }) =>
+  !!p && t >= p.start && t < p.end;
+
+/**
+ * Cruza el horario fijo con la sesión que reporta Yahoo. Yahoo conoce los
+ * festivos y el horario fijo conoce la pausa de Tokio, así que un mercado está
+ * abierto únicamente si ambos coinciden.
+ */
+export function resolveMarketState(
+  exchange: Exchange,
+  periods: TradingPeriods | undefined,
+  at: Date = new Date()
+): MarketState {
+  const scheduled = getMarketState(exchange, at);
+  if (!periods?.regular || scheduled === "closed") return scheduled;
+  // Forex, futuros y cripto operan casi continuo: Yahoo no los ajusta por sesión.
+  if (exchange === "FOREX" || exchange === "CME" || exchange === "CRYPTO") return scheduled;
+
+  const t = at.getTime() / 1000;
+  if (scheduled === "live") return inPeriod(t, periods.regular) ? "live" : "closed";
+  return inPeriod(t, periods.pre) || inPeriod(t, periods.post) ? "afterhours" : "closed";
 }
 
 export function statusLabelFor(state: MarketState): string {
   return state === "live"
     ? "En vivo"
     : state === "afterhours"
-    ? "After-hours"
-    : "Mercado cerrado";
+    ? "Extendido"
+    : "Cerrado";
 }

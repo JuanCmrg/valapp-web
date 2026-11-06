@@ -1,26 +1,125 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: dark;
+  --bg: #0a0b0d;
+  --surface: #131518;
+  --surface-2: #1c1f24;
+  --line: #24272d;
+  --line-strong: #383c44;
+  --ink: #f2f3f5;
+  --ink-2: #b0b5bd;
+  --ink-3: #8f959e;
+  --accent: #5cc2f2;
+  --on-accent: #06222f;
+  --up: #34d399;
+  --down: #f87171;
+  --warn: #fbbf24;
+  --up-wash: rgb(52 211 153 / 0.12);
+  --down-wash: rgb(248 113 113 / 0.12);
+  --warn-wash: rgb(251 191 36 / 0.12);
+  --accent-wash: rgb(92 194 242 / 0.12);
+  --neutral-wash: rgb(176 181 189 / 0.1);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --surface-2: #eef0f3;
+  --line: #e1e4e9;
+  --line-strong: #c6cad1;
+  --ink: #15171b;
+  --ink-2: #4a5059;
+  --ink-3: #626975;
+  --accent: #0369a1;
+  --on-accent: #ffffff;
+  --up: #047857;
+  --down: #c81e1e;
+  --warn: #92600a;
+  --up-wash: rgb(4 120 87 / 0.1);
+  --down-wash: rgb(200 30 30 / 0.09);
+  --warn-wash: rgb(146 96 10 / 0.1);
+  --accent-wash: rgb(3 105 161 / 0.09);
+  --neutral-wash: rgb(74 80 89 / 0.08);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
+  --color-up: var(--up);
+  --color-down: var(--down);
+  --color-warn: var(--warn);
+  --color-up-wash: var(--up-wash);
+  --color-down-wash: var(--down-wash);
+  --color-warn-wash: var(--warn-wash);
+  --color-accent-wash: var(--accent-wash);
+  --color-neutral-wash: var(--neutral-wash);
+  --font-sans: var(--font-geist-sans), system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Recibe el foco al abrirse, pero no es un control: sin anillo. */
+dialog:focus-visible {
+  outline: none;
+}
+
+dialog::backdrop {
+  background: rgb(0 0 0 / 0.65);
+  backdrop-filter: blur(3px);
+}
+
+@keyframes flash-up {
+  from {
+    background-color: var(--up-wash);
+  }
+}
+@keyframes flash-down {
+  from {
+    background-color: var(--down-wash);
+  }
+}
+.flash-up {
+  animation: flash-up 1.2s ease-out;
+}
+.flash-down {
+  animation: flash-down 1.2s ease-out;
+}
+
+@keyframes pulse-dot {
+  50% {
+    opacity: 0.35;
+  }
+}
+.pulse-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flash-up,
+  .flash-down,
+  .pulse-dot {
+    animation: none;
+  }
 }
